@@ -111,35 +111,13 @@ systemctl daemon-reload
 systemctl enable swapdex
 systemctl start swapdex
 
-function prompt_session_key() {
-  # Ask the user if they want to generate a session key
-  while true; do
-      read -p "Do you want to generate a session key? (y/n): " generate_key
-      case $generate_key in
-          [Yy]* )
-              session_key_json=$(curl -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "author_rotateKeys", "params":[]}' http://localhost:9933/)
-              session_key=$(echo "$session_key_json" | jq -r '.result')
-              echo -e "${GREEN}Session key generated: $session_key${NC}"
-              break
-              ;;
-          [Nn]* )
-              echo -e "${GREEN}Skipping session key generation.${NC}"
-              break
-              ;;
-          * )
-              echo -e "${RED}Please answer with 'y' or 'n'.${NC}"
-              ;;
-      esac
-  done
-}
+
 
 # Check if the node is syncing
 echo -e "${GREEN}Checking if the node is syncing...${NC}"
-sleep 10
+sleep 60
 sync_status_json=$(curl -s -H "Content-Type: application/json" --data '{"id":1, "jsonrpc":"2.0", "method":"system_syncState", "params":[]}' http://localhost:9933/)
-echo "Debug: sync_status_json = $sync_status_json"
 sync_status=$(echo "$sync_status_json" | jq '.result.currentBlock')
-echo "Debug: sync_status = $sync_status"
 
 if [ -z "$sync_status" ]; then
     echo -e "${RED}Failed to retrieve sync status. Please check the logs for more information.${NC}"
@@ -151,23 +129,7 @@ else
     exit 1
 fi
 
-# Ask the user if they want to generate a session key
-while true; do
-    read -p "Do you want to generate a session key? (y/n): " generate_key
-    case $generate_key in
-        [Yy]* )
-            session_key_json=$(curl -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "author_rotateKeys", "params":[]}' http://localhost:9933/)
-            echo "Debug: session_key_json = $session_key_json"
-            session_key=$(echo "$session_key_json" | jq -r '.result')
-            echo -e "${GREEN}Session key generated: $session_key${NC}"
-            break
-            ;;
-        [Nn]* )
-            echo -e "${GREEN}Skipping session key generation.${NC}"
-            break
-            ;;
-        * )
-            echo -e "${RED}Please answer with 'y' or 'n'.${NC}"
-            ;;
-    esac
-done
+# Generate session key
+session_key_json=$(curl -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "author_rotateKeys", "params":[]}' http://localhost:9933/)
+session_key=$(echo "$session_key_json" | jq -r '.result')
+echo -e "${GREEN}Session key generated: $session_key${NC}"
