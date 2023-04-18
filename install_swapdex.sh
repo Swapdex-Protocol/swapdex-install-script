@@ -23,9 +23,9 @@ fi
 
 # Check if the OS is Ubuntu 22.04 or Rocky Linux 8
 if grep -Eq 'ubuntu' /etc/os-release && grep -Eq '22.04' /etc/os-release; then
-    echo -e "${GREEN}Running on Ubuntu 22.04${NC}"
+    echo -e "${GREEN}################## Running on Ubuntu 22.04 ##################${NC}"
 elif grep -Eq 'rocky' /etc/os-release && grep -Eq '8.' /etc/os-release; then
-    echo -e "${GREEN}Running on Rocky Linux 8${NC}"
+    echo -e "${GREEN}################## Running on Rocky Linux 8 ##################${NC}"
 else
     echo -e "${RED}Unsupported OS. This script supports Ubuntu 22.04 and Rocky Linux 8 only.${NC}"
     exit 1
@@ -90,14 +90,14 @@ fi
 
 
 # Create swapdex user if it doesn't exist
-echo -e "${GREEN}Creating $user_name user if it doesn't exist...${NC}"
+echo -e "${GREEN}################## Creating $user_name user if it doesn't exist... ##################${NC}"
 if ! id -u $user_name > /dev/null 2>&1; then
     useradd -m -s /bin/bash $user_name
 fi
 
 
 # Install required packages
-echo -e "${GREEN}Installing required packages...${NC}"
+echo -e "${GREEN}################## Installing required packages... ##################${NC}"
 if grep -q "ubuntu" /etc/os-release; then
     apt-get update
     apt-get install -y curl ntp fail2ban ufw jq
@@ -111,51 +111,69 @@ else
 fi
 
 # Configure and enable the time server
-echo -e "${GREEN}Configuring and enabling the time server...${NC}"
+echo -e "${GREEN}################## Configuring and enabling the time server... ##################${NC}"
 systemctl enable ntp
 systemctl start ntp
 
 # Configure the firewall
-echo -e "${GREEN}Configuring the firewall...${NC}"
+echo -e "${GREEN}################## Configuring the firewall... ##################${NC}"
 if grep -q "ubuntu" /etc/os-release; then
     ufw allow 22
+    echo -e "${GREEN}Rule created: allow 22${NC}"
+    
     ufw allow 30333/tcp
+    echo -e "${GREEN}Rule created: allow 30333/tcp${NC}"
+    
     ufw allow 30333/udp
+    echo -e "${GREEN}Rule created: allow 30333/udp${NC}"
+    
     ufw allow ntp
+    echo -e "${GREEN}Rule created: allow ntp${NC}"
+    
     ufw --force enable
+    echo -e "${GREEN}Firewall enabled${NC}"
 elif grep -q "rocky" /etc/os-release; then
     firewall-cmd --zone=public --permanent --add-service=ssh
+    echo -e "${GREEN}Rule created: allow ssh${NC}"
+    
     firewall-cmd --zone=public --permanent --add-port=30333/tcp
+    echo -e "${GREEN}Rule created: allow 30333/tcp${NC}"
+    
     firewall-cmd --zone=public --permanent --add-port=30333/udp
+    echo -e "${GREEN}Rule created: allow 30333/udp${NC}"
+    
     firewall-cmd --zone=public --permanent --add-service=ntp
+    echo -e "${GREEN}Rule created: allow ntp${NC}"
+    
     firewall-cmd --reload
+    echo -e "${GREEN}Firewall rules reloaded${NC}"
 fi
 
 # Install and configure fail2ban
-echo -e "${GREEN}Installing and configuring fail2ban...${NC}"
+echo -e "${GREEN}################## Installing and configuring fail2ban... ##################${NC}"
 systemctl enable fail2ban
 systemctl start fail2ban
 
 # Download the swapdex binary
-echo -e "${GREEN}Downloading the $service_name binary...${NC}"
+echo -e "${GREEN}################## Downloading the $service_name binary... ##################${NC}"
 if grep -q "ubuntu" /etc/os-release; then
     URL=$ubuntu_url
 elif grep -q "rocky" /etc/os-release; then
     URL=$rocky_url
 fi
 
-curl -L -o /usr/bin/$service_name $URL
-chmod +x /usr/bin/$service_name
+curl -L -o /usr/bin/swapdex $URL
+chmod +x /usr/bin/swapdex
 
 # Create swapdex service file
-echo -e "${GREEN}Creating $service_name service file...${NC}"
+echo -e "${GREEN}################## Creating $service_name service file... ##################${NC}"
 cat >/lib/systemd/system/$service_name.service <<EOL
 [Unit]
 Description=$service_name Validator
 After=network-online.target
 
 [Service]
-ExecStart=/usr/bin/$service_name --port "30333" --name A Node Name --validator --chain $chain_name
+ExecStart=/usr/bin/swapdex --port "30333" --name A Node Name --validator --chain $chain_name
 User=$user_name
 Restart=always
 ExecStartPre=/bin/sleep 5
@@ -182,13 +200,13 @@ done
 sed -i "s|A Node Name|\"${NODE_NAME}\"|g" /lib/systemd/system/$service_name.service
 
 # Start and enable the service
-echo -e "${GREEN}Starting and enabling the $service_name service...${NC}"
+echo -e "${GREEN}################## Starting and enabling the $service_name service... ##################${NC}"
 systemctl daemon-reload
 systemctl enable $service_name
 systemctl start $service_name
 
 # Check if the node is syncing
-echo -e "${GREEN}Checking if the node is syncing...${NC}"
+echo -e "${GREEN}################## Checking if the node is syncing... ##################${NC}"
 
 max_attempts=10
 attempt=1
@@ -202,16 +220,17 @@ while [ -z "$sync_status" ] && [ $attempt -le $max_attempts ]; do
 
     if [ -n "$sync_status" ] && [ "$sync_status" != "null" ] && [ "$sync_status" -gt 0 ]; then
         echo -e "${GREEN}Node is syncing. Current block: $sync_status${NC}"
+        break
     else
         sync_status=""
         attempt=$((attempt + 1))
+        if [ $attempt -gt $max_attempts ]; then
+            echo -e "${RED}Failed to retrieve sync status after $max_attempts attempts. Please check the logs for more information.${NC}"
+            exit 1
+        fi
     fi
 done
 
-if [ -z "$sync_status" ]; then
-    echo -e "${RED}Failed to retrieve sync status after $max_attempts attempts. Please check the logs for more information.${NC}"
-    exit 1
-fi
 
 # Prompt the user if they want to generate a session key
 generate_key=""
@@ -224,7 +243,7 @@ while true; do
         [Yy]* )
             session_key_json=$(curl -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "author_rotateKeys", "params":[]}' http://localhost:9933/)
             session_key=$(echo "$session_key_json" | jq -r '.result')
-            echo -e "${LIGHT_PINK}Session key generated:${NC}"
+            echo -e "${GREEN}################## Session key generated ##################${NC}"
             echo -e "${LIGHT_PINK}$session_key${NC}"
             break
             ;;
